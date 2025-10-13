@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Results: <%= quiz.title %></title>
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        .score-passed { background-color: #d4edda; color: #155724; }
+        .score-failed { background-color: #f8d7da; color: #721c24; }
+        .score-avg { background-color: #ffeeba; color: #856404; }
+    </style>
+</head>
+<body class="bg-light">
+    <%- include('partials/header', { user: user }) %>
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="text-primary"><%= quiz.title %> Results <i class="bi bi-bar-chart-line-fill"></i></h1>
+            <a href="/professor/dashboard" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+        </div>
+
+        <p class="text-muted border-bottom pb-2">
+            Subject: **<%= quiz.subject %>** | Year: **<%= quiz.year %>**
+        </p>
+
+        <div class="row mb-5">
+            <div class="col-md-4">
+                <div class="card text-center shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title text-muted">Total Unique Attempts</h5>
+                        <p class="score-display display-4"><%= summary.totalAttempts %></p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center shadow-sm">
+                    <div class="card-body score-avg rounded">
+                        <h5 class="card-title text-dark">Average Score (Latest)</h5>
+                        <p class="score-display display-4"><%= summary.averageScore.toFixed(2) %></p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title text-muted">Max Score (All Attempts)</h5>
+                        <p class="score-display display-4">
+                            <%= attempts.length > 0 ? Math.max(...attempts.map(a => a.score_20)).toFixed(1) : 'N/A' %>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h2 class="mb-3 text-secondary">Student Performance (Latest Submission)</h2>
+
+        <% if (attempts.length === 0) { %>
+            <div class="alert alert-info text-center">No students have submitted this quiz yet.</div>
+        <% } else { %>
+            <div class="card shadow-sm">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Student Name</th>
+                                <th class="text-center">Score (/20)</th>
+                                <th>Submitted At</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% attempts.forEach(a => { %>
+                                <% const scoreClass = a.score_20 >= 10 ? 'score-passed' : 'score-failed'; %>
+                                <tr>
+                                    <td><%= a.student_name %></td>
+                                    <td class="text-center">
+                                        <span class="badge <%= scoreClass %> py-2 px-3 fs-6">
+                                            <%= a.score_20.toFixed(1) %>
+                                        </span>
+                                    </td>
+                                    <td><%= new Date(a.submitted_at).toLocaleString() %></td>
+                                    <td>
+                                        <a href="/student/quizzes/<%= quiz.id %>/results?attemptId=<%= a.attempt_id %>" class="btn btn-sm btn-outline-info disabled" title="Detailed student answer view not yet implemented">
+                                            <i class="bi bi-eye"></i> View Details
+                                        </a>
+                                    </td>
+                                </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        <% } %>
+
+    </div>
+
+    <script src="/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

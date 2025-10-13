@@ -1,0 +1,316 @@
+                                    <!DOCTYPE html>
+                                    <html lang="en">
+                                    <head>
+                                        <meta charset="UTF-8">
+                                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                        <title><%= quiz.id ? 'Edit Quiz' : 'Create New Quiz' %>: <%= quiz.title || 'Untitled' %></title>
+                                        <link href="/css/bootstrap.min.css" rel="stylesheet">
+                                        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css  ">
+                                    </head>
+                                    <body class="bg-light">
+                                        <%- include('partials/header', { user: user }) %>
+
+                                        <div class="container mt-4">
+                                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                                <h1 class="text-primary">
+                                                    <i class="bi bi-pencil-square"></i> <%= quiz.id ? 'Edit Quiz' : 'Create New Quiz' %>
+                                                </h1>
+                                                <a href="/professor/dashboard" class="btn btn-outline-secondary">
+                                                    <i class="bi bi-arrow-left"></i> Back to Dashboard
+                                                </a>
+                                            </div>
+
+                                            <% if (error) { %>
+                                                <div class="alert alert-danger"><%= error %></div>
+                                            <% } %>
+                                            <% if (success) { %>
+                                                <div class="alert alert-success"><%= success %></div>
+                                            <% } %>
+
+                                            <div class="card shadow-sm mb-4">
+                                                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                                    <h4 class="mb-0 text-secondary">Quiz Metadata</h4>
+                                                    <div class="d-flex">
+                                                        <% if (quiz.id) { %>
+                                                            <a href="/professor/quizzes/<%= quiz.id %>/export" class="btn btn-info text-white me-2" target="_blank" title="Download quiz structure as JSON">
+                                                                <i class="bi bi-download"></i> Export JSON
+                                                            </a>
+                                                            <form action="/professor/quizzes/<%= quiz.id %>/delete" method="POST" onsubmit="return confirm('Are you sure you want to delete this entire quiz, including all questions and student attempts?');">
+                                                                <button type="submit" class="btn btn-danger">
+                                                                    <i class="bi bi-trash-fill"></i> Delete Quiz
+                                                                </button>
+                                                            </form>
+                                                        <% } %>
+                                                    </div>
+                                                </div>
+                                                <div class="card-body">
+                                                    <form action="/professor/quizzes/save" method="POST">
+                                                        <input type="hidden" name="quizId" value="<%= quiz.id %>">
+
+                                                        <div class="row">
+                                                            <div class="col-md-6 mb-3">
+                                                                <label for="title" class="form-label">Quiz Title</label>
+                                                                <input type="text" class="form-control" id="title" name="title" value="<%= quiz.title %>" required>
+                                                            </div>
+                                                            <div class="col-md-4 mb-3">
+                                                                <label for="subject" class="form-label">Subject</label>
+                                                                <input type="text" class="form-control" id="subject" name="subject" value="<%= quiz.subject %>" required>
+                                                            </div>
+                                                            <div class="col-md-2 mb-3">
+                                                                <label for="year" class="form-label">Year</label>
+                                                                <input type="number" class="form-control" id="year" name="year" value="<%= quiz.year %>" required>
+                                                            </div>
+                                                        </div>
+
+                                                        <button type="submit" class="btn btn-primary">
+                                                            <i class="bi bi-save-fill"></i> Save Metadata
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </div>
+
+                                            <% if (quiz.id) { %>
+                                                <h2 class="mt-5 mb-3 text-secondary">Quiz Questions (<%= questions.length %>)</h2>
+
+                                                <% if (questions.length > 0) { %>
+                                                    <% questions.forEach(q => { %>
+                                                        <div class="card shadow-sm mb-3">
+                                                            <div class="card-body">
+                                                                <div class="d-flex justify-content-between align-items-start">
+                                                                    <h5 class="card-title">Question <%= q.question_number %></h5>
+                                                                    <div class="btn-group" role="group">
+                                                                        <form action="/professor/questions/reorder" method="POST" class="d-inline">
+                                                                            <input type="hidden" name="quizId" value="<%= quiz.id %>">
+                                                                            <input type="hidden" name="questionId" value="<%= q.id %>">
+                                                                            <input type="hidden" name="currentNumber" value="<%= q.question_number %>">
+                                                                            <input type="hidden" name="direction" value="up">
+                                                                            <button type="submit" class="btn btn-sm btn-outline-secondary" <%= q.question_number === 1 ? 'disabled' : '' %> title="Move Up"><i class="bi bi-arrow-up"></i></button>
+                                                                        </form>
+                                                                        <form action="/professor/questions/reorder" method="POST" class="d-inline">
+                                                                            <input type="hidden" name="quizId" value="<%= quiz.id %>">
+                                                                            <input type="hidden" name="questionId" value="<%= q.id %>">
+                                                                            <input type="hidden" name="currentNumber" value="<%= q.question_number %>">
+                                                                            <input type="hidden" name="direction" value="down">
+                                                                            <button type="submit" class="btn btn-sm btn-outline-secondary" <%= q.question_number === questions.length ? 'disabled' : '' %> title="Move Down"><i class="bi bi-arrow-down"></i></button>
+                                                                        </form>
+                                                                        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#questionModal" 
+                                                                                data-mode="edit" 
+                                                                                data-id="<%= q.id %>"
+                                                                                data-number="<%= q.question_number %>"
+                                                                                data-text="<%= q.question_text %>"
+                                                                                data-type="<%= q.question_type %>"
+                                                                                data-options="<%= q.options.join(', ') %>"
+                                                                                data-correct="<%= q.correct_answers.join(', ') %>"
+                                                                                data-justification-id="<%= q.justification.id || '' %>"
+                                                                                data-justification-text="<%= q.justification.text || '' %>"
+                                                                                data-image-path="<%= q.justification.image_path || '' %>">
+                                                                            <i class="bi bi-pencil"></i> Edit
+                                                                        </button>
+                                                                        <form action="/professor/questions/<%= q.id %>/delete" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete question <%= q.question_number %>?');">
+                                                                            <input type="hidden" name="quizId" value="<%= quiz.id %>">
+                                                                            <button type="submit" class="btn btn-sm btn-danger">
+                                                                                <i class="bi bi-trash"></i>
+                                                                            </button>
+                                                                        </form>
+                                                                    </div>
+                                                                </div>
+
+                                                                <p class="card-text"><%= q.question_text %></p>
+                                                                <small class="text-muted">Type: **<%= q.question_type.replace('_', ' ').toUpperCase() %>** | Correct: 
+
+                                                                    <% if (q.question_type.startsWith('qcm') && q.options) { %>
+                                                                        <% 
+                                                                            const correctLetters = q.correct_answers.map(correctText => {
+                                                                                const index = q.options.indexOf(correctText);
+                                                                                return index !== -1 ? String.fromCharCode(65 + index) : `[${correctText}]`;
+                                                                            }).join(', ');
+                                                                        %>
+                                                                        **<%= correctLetters %>**
+                                                                    <% } else { %>
+                                                                        **<%= q.correct_answers.join(', ') %>**
+                                                                    <% } %>
+
+                                                                </small>
+                                                                <% if (q.justification.text || q.justification.image_path) { %>
+                                                                    <p class="mt-2 mb-0 small text-info"><i class="bi bi-info-circle-fill"></i> Has Justification</p>
+                                                                <% } %>
+                                                            </div>
+                                                        </div>
+                                                    <% }); %>
+                                                <% } else { %>
+                                                    <div class="alert alert-info">This quiz has no questions yet. Click the "Add New Question" button below to start building it.</div>
+                                                <% } %>
+
+                                                <div class="text-center my-4">
+                                                    <button type="button" class="btn btn-success btn-lg" data-bs-toggle="modal" data-bs-target="#questionModal" data-mode="create">
+                                                        <i class="bi bi-plus-circle"></i> Add New Question
+                                                    </button>
+                                                </div>
+
+                                            <% } else { %>
+                                                 <div class="alert alert-warning">Please save the quiz metadata above before adding questions.</div>
+                                            <% } %>
+
+                                        </div>
+
+                                        <div class="modal fade" id="questionModal" tabindex="-1" aria-labelledby="questionModalLabel" aria-hidden="true">
+                                            <div class="modal-dialog modal-lg">
+                                                <div class="modal-content">
+                                                    <form action="/professor/questions/save" method="POST" enctype="multipart/form-data">
+                                                        <div class="modal-header">
+                                                            <h5 class="modal-title" id="questionModalLabel">Add New Question</h5>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <input type="hidden" name="quizId" value="<%= quiz.id %>">
+                                                            <input type="hidden" name="questionId" id="modalQuestionId">
+                                                            <input type="hidden" name="justification_id" id="modalJustificationId">
+
+                                                            <div class="row">
+                                                                <div class="col-md-3 mb-3">
+                                                                    <label for="question_number" class="form-label">Question Number</label>
+                                                                    <input type="number" class="form-control" id="question_number" name="question_number" required>
+                                                                    <small class="text-muted">Must be unique.</small>
+                                                                </div>
+                                                                <div class="col-md-9 mb-3">
+                                                                    <label for="question_text" class="form-label">Question Text</label>
+                                                                    <textarea class="form-control" id="question_text" name="question_text" rows="2" required></textarea>
+                                                                </div>
+                                                                <div class="mb-3">
+                                                                    <label for="question_image" class="form-label">Question Image (Optional)</label>
+                                                                    <input class="form-control" type="file" id="question_image" name="question_image" accept="image/*">
+                                                                    <small class="form-text text-muted">Upload an image to display above the options.</small>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="row">
+                                                                <div class="col-md-4 mb-3">
+                                                                    <label for="question_type" class="form-label">Question Type</label>
+                                                                    <select class="form-select" id="question_type" name="question_type" required>
+                                                                        <option value="qcm_single">QCM Single Choice</option>
+                                                                        <option value="qcm_multiple">QCM Multiple Choice</option>
+                                                                        <option value="short_answer">Short Answer</option>
+                                                                    </select>
+                                                                </div>
+                                                                <div class="col-md-8 mb-3">
+                                                                    <label for="options_text" class="form-label" id="optionsLabel">Options (Comma-separated)</label>
+                                                                    <input type="text" class="form-control" id="options_text" name="options_text" placeholder="Option A, Option B, Option C">
+                                                                    <small class="text-muted">Required for QCM types only.</small>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="mb-3">
+                                                                <label for="correct_answers_text" class="form-label" id="correctLabel">Correct Answer(s) (Comma-separated)</label>
+                                                                <input type="text" class="form-control" id="correct_answers_text" name="correct_answers_text" required placeholder="e.g., Option A or keyword1, keyword2">
+                                                                <small class="text-muted">Enter the correct option text (for QCM) or required keywords (for Short Answer).</small>
+                                                            </div>
+
+                                                            <hr>
+
+                                                            <h6 class="text-info">Justification (Optional)</h6>
+
+                                                            <div class="mb-3">
+                                                                <label for="justification_text" class="form-label">Justification Text</label>
+                                                                <textarea class="form-control" id="justification_text" name="justification_text" rows="3" placeholder="Explain the correct answer."></textarea>
+                                                            </div>
+
+                                                            <div class="mb-3">
+                                                                <label for="justification_image" class="form-label">Upload Justification Image</label>
+                                                                <input class="form-control" type="file" id="justification_image" name="justification_image" accept="image/*">
+                                                                <small class="text-muted">Max file size 5MB. Uploading a new image will replace the old one.</small>
+                                                                <div id="currentImageDisplay" class="mt-2"></div>
+                                                            </div>
+
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                                            <button type="submit" class="btn btn-success" id="modalSaveButton">Save Question</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+
+
+                                        <script src="/js/bootstrap.bundle.min.js"></script>
+                                        <script>
+                                            document.addEventListener('DOMContentLoaded', function() {
+                                                const modal = document.getElementById('questionModal');
+                                                if (modal) {
+                                                    modal.addEventListener('show.bs.modal', function (event) {
+                                                        const button = event.relatedTarget;
+                                                        const mode = button.getAttribute('data-mode');
+
+                                                        const modalTitle = modal.querySelector('.modal-title');
+                                                        const form = modal.querySelector('form');
+                                                        const qId = modal.querySelector('#modalQuestionId');
+                                                        const jId = modal.querySelector('#modalJustificationId');
+                                                        const qNum = modal.querySelector('#question_number');
+                                                        const qText = modal.querySelector('#question_text');
+                                                        const qType = modal.querySelector('#question_type');
+                                                        const qOptions = modal.querySelector('#options_text');
+                                                        const qCorrect = modal.querySelector('#correct_answers_text');
+                                                        const jText = modal.querySelector('#justification_text');
+                                                        const currentImageDisplay = modal.querySelector('#currentImageDisplay');
+                                                        const optionsRow = qOptions.closest('.row > div');
+
+                                                        // Reset form and UI
+                                                        form.reset();
+                                                        qId.value = '';
+                                                        jId.value = '';
+                                                        qOptions.disabled = false;
+                                                        optionsRow.classList.remove('d-none');
+                                                        currentImageDisplay.innerHTML = '';
+
+                                                        if (mode === 'create') {
+                                                            modalTitle.textContent = 'Add New Question';
+                                                            qNum.value = <%= questions.length %> + 1; // Suggest next number
+                                                        } else { // mode === 'edit'
+                                                            modalTitle.textContent = 'Edit Question ' + button.getAttribute('data-number');
+
+                                                            // Populate fields from button data attributes
+                                                            qId.value = button.getAttribute('data-id');
+                                                            qNum.value = button.getAttribute('data-number');
+                                                            qText.value = button.getAttribute('data-text');
+                                                            qType.value = button.getAttribute('data-type');
+                                                            qOptions.value = button.getAttribute('data-options');
+                                                            qCorrect.value = button.getAttribute('data-correct');
+                                                            jId.value = button.getAttribute('data-justification-id');
+                                                            jText.value = button.getAttribute('data-justification-text');
+
+                                                            const imagePath = button.getAttribute('data-image-path');
+                                                            if (imagePath) {
+                                                                 currentImageDisplay.innerHTML = `<p class="mb-0 small">Current Image:</p><img src="${imagePath}" class="img-thumbnail" style="max-height: 100px;">`;
+                                                            }
+
+                                                            // Handle type change effects on load
+                                                            handleQuestionTypeChange({ target: qType });
+                                                        }
+
+                                                        // Attach event listener for dynamic UI changes
+                                                        qType.removeEventListener('change', handleQuestionTypeChange);
+                                                        qType.addEventListener('change', handleQuestionTypeChange);
+                                                    });
+                                                }
+
+                                                function handleQuestionTypeChange(event) {
+                                                    const type = event.target.value;
+                                                    const optionsRow = document.getElementById('options_text').closest('.row > div');
+                                                    const optionsLabel = document.getElementById('optionsLabel');
+                                                    const correctLabel = document.getElementById('correctLabel');
+
+                                                    if (type === 'short_answer') {
+                                                        optionsRow.classList.add('d-none');
+                                                        document.getElementById('options_text').value = '';
+                                                        document.getElementById('options_text').disabled = true;
+                                                        correctLabel.innerHTML = 'Correct Keyword(s) (Comma-separated):';
+                                                    } else {
+                                                        optionsRow.classList.remove('d-none');
+                                                        document.getElementById('options_text').disabled = false;
+                                                        correctLabel.innerHTML = 'Correct Option(s) (Comma-separated):';
+                                                    }
+                                                }
+                                            });
+                                        </script>
+                                    </body>
+                                    </html>

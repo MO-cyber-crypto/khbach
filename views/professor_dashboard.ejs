@@ -1,0 +1,128 @@
+                    <!DOCTYPE html>
+                    <html lang="en">
+                    <head>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <title>Professor Dashboard</title>
+                        <link href="/css/bootstrap.min.css" rel="stylesheet">
+                        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+                    </head>
+                    <body class="bg-light">
+                        <%- include('partials/header', { user: user }) %>
+
+                        <div class="container mt-4">
+
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <h1 class="text-primary">Professor Dashboard <i class="bi bi-easel-fill"></i></h1>
+                                <div>
+                                    <a href="/professor/quizzes/create" class="btn btn-success me-2">
+                                        <i class="bi bi-plus-circle-fill"></i> Create New Quiz
+                                    </a>
+
+                                    <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#importModal">
+                                        <i class="bi bi-upload"></i> Import Quiz (JSON)
+                                    </button>
+
+                                    <a href="/professor/users" class="btn btn-warning ms-2">
+                                        <i class="bi bi-person-lines-fill"></i> Manage Users
+                                    </a>
+                                </div>
+                            </div>
+
+                            <% if (error) { %>
+                                <div class="alert alert-danger"><%= error %></div>
+                            <% } %>
+                            <% if (success) { %>
+                                <div class="alert alert-success"><%= success %></div>
+                            <% } %>
+
+                            <form class="row g-3 mb-4" method="GET" action="/professor/dashboard">
+                                <div class="col-md-10">
+                                    <input type="search" class="form-control" name="search" placeholder="Search quizzes by title, subject, or year..." value="<%= search %>">
+                                </div>
+                                <div class="col-md-2 d-grid">
+                                    <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Search</button>
+                                </div>
+                            </form>
+
+                            <div class="card shadow-sm">
+                                <div class="card-header bg-white">
+                                    <h5 class="mb-0">Your Quizzes (<%= quizzes.length %>)</h5>
+                                </div>
+                                <div class="card-body p-0">
+                                    <% if (quizzes.length === 0) { %>
+                                        <div class="alert alert-info m-3 text-center">
+                                            No quizzes found. Click "Create New Quiz" to get started!
+                                        </div>
+                                    <% } else { %>
+                                        <div class="table-responsive">
+                                            <table class="table table-striped table-hover mb-0">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>Title</th>
+                                                        <th>Subject</th>
+                                                        <th>Year</th>
+                                                        <th class="text-center">Actions</th>
+                                                        <th class="text-center">Results</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <% quizzes.forEach(quiz => { %>
+                                                        <tr>
+                                                            <td><%= quiz.title %></td>
+                                                            <td><%= quiz.subject %></td>
+                                                            <td><%= quiz.year %></td>
+                                                            <td class="text-center">
+                                                                <a href="/professor/quizzes/<%= quiz.id %>/edit" class="btn btn-sm btn-primary me-2" title="Edit Quiz Structure and Questions">
+                                                                    <i class="bi bi-pencil-square"></i> Edit
+                                                                </a>
+                                                                <form action="/professor/quizzes/<%= quiz.id %>/delete" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete the quiz: <%= quiz.title %>? This action is permanent and deletes all student attempts.');">
+                                                                    <button type="submit" class="btn btn-sm btn-danger" title="Delete Quiz">
+                                                                        <i class="bi bi-trash"></i> Delete
+                                                                    </button>
+                                                                </form>
+                                                            </td>
+                                                            <td class="text-center">
+                                                                <a href="/professor/quizzes/<%= quiz.id %>/results" class="btn btn-sm btn-info text-white" title="View Student Results">
+                                                                    <i class="bi bi-bar-chart-line-fill"></i> Results
+                                                                </a>
+                                                            </td>
+                                                        </tr>
+                                                    <% }); %>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    <% } %>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal fade" id="importModal" tabindex="-1" aria-labelledby="importModalLabel" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title" id="importModalLabel">Import Quiz from JSON</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <form action="/professor/quizzes/import" method="POST" enctype="multipart/form-data">
+                                        <div class="modal-body">
+                                            <p class="text-muted">Upload a valid quiz structure in JSON format.</p>
+                                            <div class="mb-3">
+                                                <label for="quizFile" class="form-label">Select JSON File</label>
+                                                <input class="form-control" type="file" id="quizFile" name="quiz_file" accept=".json" required>
+                                                <small class="text-danger">Note: Image files referenced in the JSON must be uploaded manually to the server.</small>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            <button type="submit" class="btn btn-primary"><i class="bi bi-upload"></i> Upload & Import</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <script src="/js/bootstrap.bundle.min.js"></script>
+                    </body>
+                    </html>
