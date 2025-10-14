@@ -1,0 +1,24 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="<%= user.role === 'professor' ? '/professor/dashboard' : '/student/dashboard' %>">
+            <span class="fw-bold">🎓 Quiz App</span>
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <span class="nav-link text-white me-3">
+                        Welcome, <strong><%= user.name %></strong> (<%= user.role.charAt(0).toUpperCase() + user.role.slice(1) %>)
+                    </span>
+                </li>
+                <li class="nav-item">
+                    <a class="btn btn-sm btn-outline-light" href="/logout">
+                        <i class="bi bi-box-arrow-right"></i> Logout
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>

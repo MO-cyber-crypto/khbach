@@ -1,0 +1,139 @@
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Results: <%= quiz.title %></title>
+                <link href="/css/bootstrap.min.css" rel="stylesheet">
+                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css  ">
+                <style>
+                    .score-display {
+                        font-size: 2.5rem;
+                        font-weight: bold;
+                    }
+                    .passed { color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb; }
+                    .failed { color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; }
+                    .answer-correct { border-left: 5px solid #198754; }
+                    .answer-incorrect { border-left: 5px solid #dc3545; }
+
+                    .options-container {
+                        margin: 1rem 0;
+                    }
+                </style>
+            </head>
+            <body class="bg-light">
+                <%- include('partials/header', { user: user }) %>
+
+                <div class="container mt-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h1 class="text-success"><%= quiz.title %> Results</h1>
+                        <a href="/student/dashboard" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+                    </div>
+
+                    <div class="card shadow-lg mb-5 text-center">
+                        <div class="card-header bg-white">
+                            <h4 class="mb-0 text-muted">Your Latest Attempt Score</h4>
+                        </div>
+                        <div class="card-body p-4 <%= attempt.score_20 >= 10 ? 'passed' : 'failed' %>">
+                            <div class="score-display">
+                                <%= attempt.score_20.toFixed(1) %> <small>/ 20</small>
+                            </div>
+                            <p class="mb-0">Submitted on: <%= new Date(attempt.submitted_at).toLocaleDateString() %> at <%= new Date(attempt.submitted_at).toLocaleTimeString() %></p>
+                        </div>
+                    </div>
+
+                    <h2 class="mb-3 text-secondary">Question Breakdown</h2>
+
+                    <% results.forEach(r => { %>
+                        <div class="card shadow-sm mb-4 <%= r.is_correct ? 'answer-correct' : 'answer-incorrect' %>">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5 class="mb-0">Question <%= r.question_number %></h5>
+                                    <span class="badge bg-<%= r.is_correct ? 'success' : 'danger' %> fs-6">
+                                        <%= r.is_correct ? 'Correct' : 'Incorrect' %>
+                                    </span>
+                                </div>
+
+                                <p class="fw-bold"><%= r.question_text %></p>
+
+                                <hr>
+                                <h5>Question <%= r.question_number %>: <%= r.question_text %></h5>
+
+                                <% if (r.question_image_path) { %>
+                                    <div class="mb-3 text-center">
+                                        <img src="<%= r.question_image_path %>" alt="Question Illustration" style="max-width: 100%; height: auto; border: 1px solid #ccc; border-radius: 5px; margin-bottom: 10px;">
+                                    </div>
+                                <% } %>
+                                <!-- Updated Options Section -->
+                                <div class="options-container">
+                                    <% if (r.options) { %>
+                                        <% r.options.forEach((option, optionIndex) => { %>
+                                            <% const optionLetter = String.fromCharCode(65 + optionIndex); %>
+                                            <% const isCorrect = r.correct_answers.includes(option); %>
+                                            <% const isStudentAnswer = r.student_answer.includes(option); %>
+
+                                            <% let badgeClass = 'text-dark border border-secondary'; %>
+                                            <% if (isStudentAnswer && isCorrect) { %>
+                                                <% badgeClass = 'bg-success text-white'; %>
+                                            <% } else if (isStudentAnswer && !isCorrect) { %>
+                                                <% badgeClass = 'bg-danger text-white'; %>
+                                            <% } else if (!isStudentAnswer && isCorrect) { %>
+                                                <% badgeClass = 'bg-info text-white'; %>
+                                            <% } %>
+
+                                            <div class="p-2 mb-2 rounded <%= badgeClass %> d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    **<%= optionLetter %>. ** <%= option %>
+                                                </div>
+                                                <div>
+                                                    <% if (isCorrect) { %>
+                                                        <span class="badge bg-light text-success me-1"><i class="bi bi-check-lg"></i> Correct</span>
+                                                    <% } %>
+                                                    <% if (isStudentAnswer) { %>
+                                                        <span class="badge bg-light text-primary"><i class="bi bi-person-fill"></i> Your Answer</span>
+                                                    <% } %>
+                                                </div>
+                                            </div>
+                                        <% }); %>
+                                    <% } %>
+                                </div>
+
+                                <% if (!r.options) { %>
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <h6>Your Answer:</h6>
+                                            <div class="alert alert-light border">
+                                                <%= r.student_answer.length > 0 ? r.student_answer.join(', ') : 'No Answer Provided' %>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <h6>Correct Answer(s):</h6>
+                                            <div class="alert alert-success">
+                                                <%= r.correct_answers.join(', ') %>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <% } %>
+
+                                <% if (r.justification.text || r.justification.image_path) { %>
+                                    <div class="border-top pt-3 mt-3">
+                                        <h6 class="text-info"><i class="bi bi-book"></i> Professor's Justification:</h6>
+                                        <% if (r.justification.text) { %>
+                                            <p class="alert alert-info small"><%= r.justification.text %></p>
+                                        <% } %>
+                                        <% if (r.justification.image_path) { %>
+                                            <img src="<%= r.justification.image_path %>" class="img-fluid rounded shadow-sm" style="max-height: 200px; object-fit: cover;">
+                                        <% } %>
+                                    </div>
+                                <% } else { %>
+                                    <p class="text-muted border-top pt-3 mt-3">No justification provided by the professor.</p>
+                                <% } %>
+                            </div>
+                        </div>
+                    <% }); %>
+
+                </div>
+
+                <script src="/js/bootstrap.bundle.min.js"></script>
+            </body>
+            </html>

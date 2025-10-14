@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Take Quiz: <%= quiz.title %></title>
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+</head>
+<body class="bg-light">
+    <%- include('partials/header', { user: user }) %>
+
+    <div class="container mt-4">
+        <h1 class="mb-3 text-success">
+            <i class="bi bi-patch-question-fill"></i> <%= quiz.title %>
+        </h1>
+        <p class="text-muted border-bottom pb-2">
+            **Subject:** <%= quiz.subject %> (**Year:** <%= quiz.year %>) | **Total Questions:** <%= questions.length %>
+        </p>
+
+        <% if (error) { %>
+            <div class="alert alert-danger"><%= error %></div>
+        <% } %>
+
+        <form action="/student/quizzes/<%= quiz.id %>/submit" method="POST">
+            <% questions.forEach(q => { %>
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">Question <%= q.question_number %></h5>
+                        <small class="text-muted"><%= q.question_type.replace('_', ' ').toUpperCase() %></small>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text fw-bold"><%= q.question_text %></p>
+                        <h5 class="card-title mb-3">Question <%= q.question_number %>: <%= q.question_text %></h5>
+
+                        <% if (q.question_image_path) { %>
+                            <div class="mb-3 text-center">
+                                <img src="<%= q.question_image_path %>" alt="Question Illustration" style="max-width: 100%; height: auto; border: 1px solid #ccc; border-radius: 5px; margin-bottom: 10px;">
+                            </div>
+                        <% } %>
+                        <% if (q.question_type.startsWith('qcm')) { %>
+                            <div class="form-group">
+                                    <% if (q.options) { %>
+                                        <% q.options.forEach((option, optionIndex) => { %>
+                                            <% const optionLetter = String.fromCharCode(65 + optionIndex); %> 
+                                            <div class="form-check mb-2">
+                                                <% if (q.question_type === 'qcm_single') { %>
+                                                    <input class="form-check-input" type="radio" name="answer_<%= q.id %>" id="option_<%= q.id %>_<%= optionIndex %>" value="<%= option %>" required>
+                                                    <label class="form-check-label" for="option_<%= q.id %>_<%= optionIndex %>">
+                                                        **<%= optionLetter %>. ** <%= option %>
+                                                    </label>
+                                                <% } else if (q.question_type === 'qcm_multiple') { %>
+                                                    <input class="form-check-input" type="checkbox" name="answer_<%= q.id %>[]" id="option_<%= q.id %>_<%= optionIndex %>" value="<%= option %>">
+                                                    <label class="form-check-label" for="option_<%= q.id %>_<%= optionIndex %>">
+                                                        **<%= optionLetter %>. ** <%= option %>
+                                                    </label>
+                                                <% } %>
+                                            </div>
+                                        <% }); %>
+                                    <% } %>
+                            </div>
+                        <% } else if (q.question_type === 'short_answer') { %>
+                            <div class="form-group">
+                                <label for="q<%= q.id %>_answer" class="form-label">Your Answer:</label>
+                                <input type="text" class="form-control" id="q<%= q.id %>_answer" name="answer_<%= q.id %>" required>
+                                <small class="text-muted">Enter your response above.</small>
+                            </div>
+                        <% } %>
+                    </div>
+                </div>
+            <% }); %>
+
+            <div class="text-center my-5">
+                <button type="submit" class="btn btn-success btn-lg shadow-lg">
+                    <i class="bi bi-send-fill"></i> Submit Quiz
+                </button>
+            </div>
+        </form>
+
+    </div>
+
+    <script src="/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

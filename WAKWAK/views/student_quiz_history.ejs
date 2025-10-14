@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attempt History: <%= quiz.title %></title>
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        .score-passed { background-color: #d1e7dd; color: #0f5132; }
+        .score-failed { background-color: #f8d7da; color: #842029; }
+        .score-max { background-color: #cff4fc; color: #055160; }
+    </style>
+</head>
+<body class="bg-light">
+    <%- include('partials/header', { user: user }) %>
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="text-primary"><%= quiz.title %> History <i class="bi bi-clock-history"></i></h1>
+            <a href="/student/dashboard" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+        </div>
+
+        <p class="text-muted border-bottom pb-2">
+            Subject: **<%= quiz.subject %>** | Total Attempts: **<%= summary.totalAttempts %>**
+        </p>
+
+        <div class="row mb-5">
+            <div class="col-md-4">
+                <div class="card text-center shadow-sm score-max rounded">
+                    <div class="card-body">
+                        <h5 class="card-title text-dark">Highest Score Achieved</h5>
+                        <p class="display-4 mb-0"><%= summary.highestScore.toFixed(1) %></p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title text-muted">Average Score</h5>
+                        <p class="display-4 mb-0 text-secondary"><%= summary.averageScore.toFixed(2) %></p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title text-muted">Take Quiz Again</h5>
+                        <a href="/student/quizzes/<%= quiz.id %>/take" class="btn btn-lg btn-success mt-2">
+                            <i class="bi bi-arrow-repeat"></i> Retake
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h2 class="mb-3 text-secondary">Attempt Log</h2>
+
+        <% if (attempts.length === 0) { %>
+             <div class="alert alert-info text-center">No attempts recorded for this quiz.</div>
+        <% } else { %>
+            <div class="card shadow-sm">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th class="text-center">Score (/20)</th>
+                                <th>Submitted At</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% attempts.forEach((a, index) => { %>
+                                <% const scoreClass = a.score_20 >= 10 ? 'score-passed' : 'score-failed'; %>
+                                <tr>
+                                    <td><%= attempts.length - index %></td>
+                                    <td class="text-center">
+                                        <span class="badge <%= scoreClass %> py-2 px-3 fs-6">
+                                            <%= a.score_20.toFixed(1) %>
+                                        </span>
+                                    </td>
+                                    <td><%= new Date(a.submitted_at).toLocaleString() %></td>
+                                    <td>
+                                        <a href="/student/quizzes/<%= quiz.id %>/results" class="btn btn-sm btn-outline-primary" title="View details of the latest attempt">
+                                            <i class="bi bi-eye"></i> View Latest Details
+                                        </a>
+                                    </td>
+                                </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        <% } %>
+
+    </div>
+
+    <script src="/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
