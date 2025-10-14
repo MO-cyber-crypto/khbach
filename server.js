@@ -10,6 +10,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 const multer = require("multer");
 const rateLimit = require("express-rate-limit");
+const { createClient } = require("@supabase/supabase-js");
 
 // 2. Initialize App and Database
 const app = express();
@@ -26,30 +27,25 @@ const pool = new Pool({
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-// --- FILE UPLOAD CONFIGURATION (MULTER) ---
-const UPLOADS_DIR = path.join(__dirname, "uploads");
-if (!fs.existsSync(UPLOADS_DIR)) {
-    fs.mkdirSync(UPLOADS_DIR);
+// 3. Initialize Supabase Client for Storage
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+let supabase = null;
+if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log("Supabase Storage initialized successfully.");
+} else {
+    console.warn("WARNING: Supabase credentials not found. File uploads will fail.");
+    console.warn("Please set SUPABASE_URL and SUPABASE_ANON_KEY environment variables.");
 }
 
-// Set up storage for uploaded images
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, UPLOADS_DIR);
-    },
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        cb(
-            null,
-            Date.now() + "-" + crypto.randomBytes(4).toString("hex") + ext,
-        );
-    },
-});
-
+// --- FILE UPLOAD CONFIGURATION (MULTER) ---
+// Using memory storage for Supabase cloud uploads
 const quizFileUpload = multer({
-    storage: storage,
+    storage: multer.memoryStorage(),
     limits: {
-        fileSize: 5 * 1024 * 1024,
+        fileSize: 5 * 1024 * 1024, // 5MB limit
     },
     fileFilter: (req, file, cb) => {
         const allowedTypes = /jpeg|jpg|png|gif|webp/;
@@ -63,6 +59,49 @@ const quizFileUpload = multer({
         }
     },
 });
+
+// Helper function to upload file to Supabase Storage
+async function uploadToSupabase(fileBuffer, fileName, mimeType) {
+    if (!supabase) {
+        throw new Error("Supabase is not initialized. Please configure SUPABASE_URL and SUPABASE_ANON_KEY.");
+    }
+
+    const { data, error } = await supabase.storage
+        .from('quiz-images')
+        .upload(fileName, fileBuffer, {
+            contentType: mimeType,
+            upsert: false
+        });
+
+    if (error) {
+        throw new Error(`Supabase upload failed: ${error.message}`);
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+        .from('quiz-images')
+        .getPublicUrl(data.path);
+
+    return urlData.publicUrl;
+}
+
+// Helper function to delete file from Supabase Storage
+async function deleteFromSupabase(filePath) {
+    if (!supabase || !filePath) {
+        return;
+    }
+
+    // Extract filename from URL
+    const fileName = filePath.split('/').pop();
+    
+    const { error } = await supabase.storage
+        .from('quiz-images')
+        .remove([fileName]);
+
+    if (error) {
+        console.error(`Failed to delete file from Supabase: ${error.message}`);
+    }
+}
 
 // --- HELPER FUNCTIONS ---
 function hashPassword(password, salt) {
