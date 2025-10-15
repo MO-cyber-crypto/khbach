@@ -17,15 +17,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const DATABASE_URL = process.env.DATABASE_URL;
 
-if (!DATABASE_URL) {
-    console.error("ERROR: DATABASE_URL environment variable is not set!");
-    process.exit(1);
-}
-
-const pool = new Pool({
-    connectionString: DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
+// Defer database pool initialization until setupApp runs so importing this
+// module in a serverless environment doesn't exit the process on missing env vars.
+let pool = null;
 
 // 3. Initialize Supabase Client for Storage
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -225,13 +219,22 @@ async function initializeDatabase() {
 // 3. Configure Database Connection and Initialization
 async function setupApp() {
     try {
+        if (!DATABASE_URL) {
+            throw new Error('DATABASE_URL environment variable is not set');
+        }
+
+        pool = new Pool({
+            connectionString: DATABASE_URL,
+            ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+        });
+
         const client = await pool.connect();
         console.log("Connected to PostgreSQL database.");
         client.release();
-        
+
         // Initialize database schema first
         await initializeDatabase();
-        
+
         // Expose the database pool
         app.locals.db = pool;
 
