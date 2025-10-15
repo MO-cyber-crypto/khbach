@@ -237,7 +237,7 @@ async function setupApp() {
 
         // 4. Configure Middleware
         app.use(express.static(path.join(__dirname, "public")));
-        app.use("/uploads", express.static(UPLOADS_DIR));
+        // Note: /uploads route removed - now using Supabase cloud storage
         app.use(express.urlencoded({ extended: true }));
         app.use(express.json());
 
