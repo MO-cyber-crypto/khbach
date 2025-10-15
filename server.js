@@ -277,10 +277,27 @@ async function setupApp() {
     }
 }
 
-// Call setup before defining routes
-setupApp().then(() => {
+// Exported initializer so external adapters (like Vercel serverless function) can await setup
+async function createApp() {
+    await setupApp();
     console.log("App setup complete, routes are being configured...");
+    return app;
+}
 
+// If this file is run directly (node server.js), start the server normally
+if (require.main === module) {
+    createApp().then(() => {
+        app.listen(PORT, () => {
+            console.log(`Server listening on port ${PORT}`);
+        });
+    }).catch((err) => {
+        console.error("Failed to setup app:", err);
+        process.exit(1);
+    });
+} else {
+    // When imported, export createApp and app for external adapters
+    module.exports = { createApp, app };
+}
 // --- RATE LIMITING ---
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -1997,11 +2014,4 @@ app.use((err, req, res, next) => {
     next();
 });
 
-// 10. Start the Server
-    app.listen(PORT, () => {
-        console.log(`Server listening on port ${PORT}`);
-    });
-}).catch((err) => {
-    console.error("Failed to setup app:", err);
-    process.exit(1);
-});
+// (server start handled in the createApp conditional above)
