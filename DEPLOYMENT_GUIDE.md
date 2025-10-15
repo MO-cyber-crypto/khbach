@@ -2,7 +2,7 @@
 
 ## Migration Summary (October 2025)
 
-This application has been successfully migrated from SQLite to PostgreSQL to support cloud deployment on Vercel with Supabase database.
+This application has been successfully migrated from SQLite to PostgreSQL and from local file storage to Supabase cloud storage to support cloud deployment on Vercel.
 
 ## Environment Variables Required
 
@@ -11,7 +11,15 @@ For deployment on Vercel, you need to set the following environment variables:
 ### Required
 - `DATABASE_URL`: Your Supabase PostgreSQL connection string
   - Format: `postgresql://user:password@host:port/database`
-  - Get this from your Supabase project settings
+  - Get this from your Supabase project settings → Database → Connection String
+  - Use the "Connection Pooling" URL for better performance
+
+- `SUPABASE_URL` (or `NEXT_PUBLIC_SUPABASE_URL`): Your Supabase project URL
+  - Format: `https://xxxxx.supabase.co`
+  - Get this from your Supabase project settings → API → Project URL
+
+- `SUPABASE_ANON_KEY` (or `NEXT_PUBLIC_SUPABASE_ANON_KEY`): Your Supabase anonymous key
+  - Get this from your Supabase project settings → API → Project API keys → anon public
 
 ### Recommended
 - `SESSION_SECRET`: A random 32+ character string for session encryption
@@ -24,24 +32,44 @@ For deployment on Vercel, you need to set the following environment variables:
 
 ## Vercel Deployment Steps
 
-1. **Connect Your Supabase Database**
-   - Create a Supabase project at https://supabase.com
-   - Get your DATABASE_URL from Project Settings > Database > Connection String
-   - Use the "Connection Pooling" URL for better performance
+### 1. Set Up Supabase Project
 
-2. **Set Environment Variables in Vercel**
+#### A. Create Supabase Project
+- Go to https://supabase.com and create a new project
+- Note down your project URL and anon key from Settings → API
+
+#### B. Set Up Supabase Storage Bucket
+1. Go to Storage in your Supabase dashboard
+2. Click "New Bucket"
+3. Name it `quiz-images`
+4. Choose **Public** bucket (for image access)
+5. Click "Create Bucket"
+
+#### C. Configure Storage Policies
+1. Go to Storage → Policies → quiz-images bucket
+2. Click "New Policy"
+3. Create a policy to allow uploads:
+   - Policy Name: "Allow public uploads"
+   - Policy Definition: SELECT, INSERT, UPDATE, DELETE
+   - For testing, you can allow all operations (refine for production)
+
+### 2. Set Environment Variables in Vercel
    - Go to your Vercel project settings
    - Navigate to Environment Variables
-   - Add `DATABASE_URL` with your Supabase connection string
-   - Add `SESSION_SECRET` with a secure random string
-   - Add `NODE_ENV` set to `production`
+   - Add the following variables:
+     - `DATABASE_URL` = Your Supabase PostgreSQL connection string
+     - `SUPABASE_URL` = Your Supabase project URL
+     - `SUPABASE_ANON_KEY` = Your Supabase anonymous key
+     - `SESSION_SECRET` = A secure random string (generate with `openssl rand -hex 32`)
+     - `NODE_ENV` = `production`
 
-3. **Deploy**
+### 3. Deploy to Vercel
    - Push your code to GitHub
+   - Connect your repository to Vercel
    - Vercel will automatically deploy
    - The database schema will be created automatically on first run
 
-4. **Initial Setup**
+### 4. Initial Setup
    - The first time the app runs, it will:
      - Create all necessary database tables
      - Seed a default professor account:
@@ -65,6 +93,12 @@ The application automatically creates these tables:
 ### Database Connection
 - **Before**: SQLite file-based database (`quiz_app.db`)
 - **After**: PostgreSQL connection pool using `DATABASE_URL`
+
+### File Storage (October 2025)
+- **Before**: Local disk storage in `uploads/` directory
+- **After**: Supabase cloud storage in `quiz-images` bucket
+- **Upload Method**: Memory buffers → Supabase Storage API
+- **File Access**: Local paths → Public Supabase URLs
 
 ### SQL Syntax Updates
 - Parameter placeholders: `?` → `$1, $2, $3...`
@@ -118,9 +152,23 @@ To test the PostgreSQL version locally:
 - Use Supabase "Connection Pooling" URL for better performance
 - Check that your Supabase project is running and accessible
 
+### File upload errors
+- **"Supabase is not initialized"**: Check that SUPABASE_URL and SUPABASE_ANON_KEY are set
+- **"Supabase upload failed"**: Verify the `quiz-images` bucket exists in Supabase Storage
+- **"Permission denied"**: Check storage policies allow INSERT/UPDATE operations
+- **Images not displaying**: Ensure the bucket is set to **Public**, not Private
+
+### Storage Policy Issues
+If images upload but don't display:
+1. Go to Supabase → Storage → quiz-images → Policies
+2. Ensure you have a policy allowing SELECT (read) operations
+3. For public access, create a policy that allows SELECT for all users
+
 ## Support
 
 For issues specific to:
-- **Database**: Check Supabase dashboard and logs
+- **Database**: Check Supabase dashboard → Database logs
+- **Storage**: Check Supabase dashboard → Storage → quiz-images bucket
 - **Deployment**: Check Vercel deployment logs
+- **File Uploads**: Check browser console for errors and Vercel function logs
 - **Application**: Check server logs in Vercel Functions tab

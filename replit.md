@@ -100,16 +100,29 @@ PBKDF2 with a high iteration count provides strong password security without ext
 
 ### File Upload Management
 
-**Library:** Multer 1.4.x
-- **Storage:** Disk storage in `uploads/` directory
+**Library:** Multer with Supabase Storage - **UPDATED October 2025**
+- **Storage:** Supabase Cloud Storage (bucket: `quiz-images`)
+- **Upload Method:** Memory storage with buffer upload to Supabase
 - **File Naming:** Timestamp + random hex suffix to prevent collisions
-- **Use Case:** Quiz question images
+- **Use Case:** Quiz question images and justification images
+
+**Migration from Local Storage (October 2025):**
+The application was migrated from local disk storage to Supabase cloud storage to support Vercel deployment. Changes include:
+- Multer now uses memory storage instead of disk storage
+- Files are uploaded to Supabase Storage bucket via the `@supabase/supabase-js` client
+- Public URLs are generated for file access
+- File deletion is handled through Supabase API when questions/quizzes are deleted
 
 **Design Decision:**
-Multer provides straightforward file upload handling for Express applications. Local disk storage is suitable for this application's scale, avoiding the complexity and cost of cloud storage solutions.
+Supabase Storage provides cloud-native file storage that works seamlessly with Vercel's serverless architecture. This eliminates the need for persistent local file storage and allows horizontal scaling.
 
 **Rationale:**
-For quiz creation features requiring images, local file storage is simple to implement and maintain. Files are given unique names to prevent overwrites and maintain organization.
+Cloud storage is essential for serverless deployments where the file system is ephemeral. Supabase provides a simple, integrated solution with the database already in use.
+
+**Trade-offs:**
+- **Pros:** Cloud-native, scalable, works with serverless, integrated with Supabase database
+- **Cons:** Requires Supabase credentials, external dependency, bandwidth costs for large files
+- **Previous Version:** Used local disk storage which doesn't work on Vercel
 
 ## External Dependencies
 
@@ -122,7 +135,7 @@ For quiz creation features requiring images, local file storage is simple to imp
 ### Data & Storage
 - **pg (^8.x):** PostgreSQL database driver for Node.js - **UPDATED October 2025**
 - **connect-pg-simple (^9.x):** PostgreSQL session store for express-session - **ADDED October 2025**
-- **@supabase/supabase-js (^2.75.0):** Supabase client library (installed but not actively used)
+- **@supabase/supabase-js (^2.75.0+):** Supabase client library for cloud storage - **ACTIVELY USED October 2025**
 - **multer (^1.4.5-lts.1 | ^2.0.2):** Middleware for handling multipart/form-data file uploads with security features
 
 ### UI Framework
