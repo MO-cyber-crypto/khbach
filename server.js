@@ -1092,7 +1092,7 @@ app.post(
         { name: "question_image", maxCount: 1 },
         { name: "justification_image", maxCount: 1 },
     ]),
-    (req, res, next) => {
+    async (req, res, next) => {
         const db = req.app.locals.db;
         const {
             quizId,
@@ -1107,34 +1107,49 @@ app.post(
         } = req.body;
         const professorId = req.session.userId;
 
-        // 1. SAFELY DETERMINE IMAGE PATHS (Fix for potential TypeError)
-        // req.files is guaranteed to be an object when using upload.fields, but we make the access safe anyway.
-        const quizFile = req.file;
+        // 1. UPLOAD FILES TO SUPABASE
         const files = req.files || {};
-        // QUESTION IMAGE PATH
-        const questionImageFile =
-            files.question_image && files.question_image[0];
-        const questionImagePath = questionImageFile
-            ? `/uploads/${questionImageFile.filename}`
-            : null;
+        const questionImageFile = files.question_image && files.question_image[0];
+        const justificationImageFile = files.justification_image && files.justification_image[0];
 
-        // JUSTIFICATION IMAGE PATH (Note: This logic is for the *justification* image path, which is separate)
-        const justificationImageFile =
-            files.justification_image && files.justification_image[0];
-        const justificationImagePath = justificationImageFile
-            ? `/uploads/${justificationImageFile.filename}`
-            : null;
+        let questionImagePath = null;
+        let justificationImagePath = null;
+
+        try {
+            // Upload question image if present
+            if (questionImageFile) {
+                const fileName = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}-${questionImageFile.originalname}`;
+                questionImagePath = await uploadToSupabase(
+                    questionImageFile.buffer,
+                    fileName,
+                    questionImageFile.mimetype
+                );
+            }
+
+            // Upload justification image if present
+            if (justificationImageFile) {
+                const fileName = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}-${justificationImageFile.originalname}`;
+                justificationImagePath = await uploadToSupabase(
+                    justificationImageFile.buffer,
+                    fileName,
+                    justificationImageFile.mimetype
+                );
+            }
+        } catch (uploadError) {
+            console.error("File upload error:", uploadError.message);
+            return res.redirect(
+                `/professor/quizzes/${quizId}/edit?error=File upload failed: ${uploadError.message}`
+            );
+        }
 
         db.query(
             "SELECT id FROM quizzes WHERE id = $1 AND professor_id = $2",
             [quizId, professorId],
-            (err, result) => {
+            async (err, result) => {
                 if (err || !result.rows || result.rows.length === 0) {
-                    // Cleanup any files uploaded before redirecting
-                    if (questionImageFile)
-                        fs.unlinkSync(questionImageFile.path);
-                    if (justificationImageFile)
-                        fs.unlinkSync(justificationImageFile.path);
+                    // Delete uploaded files from Supabase if quiz validation fails
+                    if (questionImagePath) await deleteFromSupabase(questionImagePath);
+                    if (justificationImagePath) await deleteFromSupabase(justificationImagePath);
                     return res
                         .status(403)
                         .send("Quiz not found or unauthorized access.");
@@ -1143,7 +1158,7 @@ app.post(
                 let optionsJson = null;
                 let correctAnswersJson = null;
 
-                // 2. Process Options and Correct Answers (Keep existing validation logic)
+                // 2. Process Options and Correct Answers
                 try {
                     const trimmedAnswers = correct_answers_text
                         .split(",")
@@ -1175,11 +1190,9 @@ app.post(
                     }
                 } catch (e) {
                     console.error("Question data processing error:", e.message);
-                    // Cleanup any files uploaded before redirecting
-                    if (questionImageFile)
-                        fs.unlinkSync(questionImageFile.path);
-                    if (justificationImageFile)
-                        fs.unlinkSync(justificationImageFile.path);
+                    // Delete uploaded files from Supabase on validation error
+                    if (questionImagePath) await deleteFromSupabase(questionImagePath);
+                    if (justificationImagePath) await deleteFromSupabase(justificationImagePath);
                     return res.redirect(
                         `/professor/quizzes/${quizId}/edit?error=Question data error: ${e.message}`,
                     );
@@ -1217,17 +1230,15 @@ app.post(
                     ];
                 }
 
-                db.query(questionSql, questionData, (questionErr, questionResult) => {
+                db.query(questionSql, questionData, async (questionErr, questionResult) => {
                     if (questionErr) {
                         console.error(
                             "Question save error:",
                             questionErr.message,
                         );
-                        // Cleanup files on database error
-                        if (questionImageFile)
-                            fs.unlinkSync(questionImageFile.path);
-                        if (justificationImageFile)
-                            fs.unlinkSync(justificationImageFile.path);
+                        // Delete uploaded files from Supabase on database error
+                        if (questionImagePath) await deleteFromSupabase(questionImagePath);
+                        if (justificationImagePath) await deleteFromSupabase(justificationImagePath);
                         let errorMsg = "Failed to save question.";
                         if (
                             questionErr.message.includes(
@@ -1308,53 +1319,41 @@ app.post(
 app.post(
     "/professor/questions/:questionId/delete",
     requireProfessor,
-    (req, res) => {
+    async (req, res) => {
         const db = req.app.locals.db;
         const questionId = req.params.questionId;
         const { quizId } = req.body;
 
-        // 1. Get image path for deletion
-        db.query(
-            "SELECT j.image_path FROM questions q LEFT JOIN justifications j ON q.id = j.question_id WHERE q.id = $1",
-            [questionId],
-            (err, result) => {
-                if (result && result.rows && result.rows.length > 0 && result.rows[0].image_path) {
-                    const imagePath = path.join(
-                        UPLOADS_DIR,
-                        path.basename(result.rows[0].image_path),
-                    );
-                    if (fs.existsSync(imagePath)) {
-                        fs.unlink(imagePath, (e) => {
-                            if (e)
-                                console.error(
-                                    "Could not delete justification image:",
-                                    e.message,
-                                );
-                        });
-                    }
-                }
+        try {
+            // 1. Get image paths for deletion from both questions and justifications
+            const result = await db.query(
+                "SELECT q.question_image_path, j.image_path as justification_image_path FROM questions q LEFT JOIN justifications j ON q.id = j.question_id WHERE q.id = $1",
+                [questionId]
+            );
 
-                // 2. Delete question (and cascade delete justifications/answers)
-                db.query(
-                    "DELETE FROM questions WHERE id = $1",
-                    [questionId],
-                    (delErr) => {
-                        if (delErr) {
-                            console.error(
-                                "Question deletion error:",
-                                delErr.message,
-                            );
-                            return res.redirect(
-                                `/professor/quizzes/${quizId}/edit?error=Failed to delete question.`,
-                            );
-                        }
-                        res.redirect(
-                            `/professor/quizzes/${quizId}/edit?success=Question deleted successfully.`,
-                        );
-                    },
-                );
-            },
-        );
+            // Delete images from Supabase if they exist
+            if (result.rows && result.rows.length > 0) {
+                const row = result.rows[0];
+                if (row.question_image_path) {
+                    await deleteFromSupabase(row.question_image_path);
+                }
+                if (row.justification_image_path) {
+                    await deleteFromSupabase(row.justification_image_path);
+                }
+            }
+
+            // 2. Delete question (cascade deletes justifications/answers)
+            await db.query("DELETE FROM questions WHERE id = $1", [questionId]);
+            
+            res.redirect(
+                `/professor/quizzes/${quizId}/edit?success=Question deleted successfully.`
+            );
+        } catch (err) {
+            console.error("Question deletion error:", err.message);
+            res.redirect(
+                `/professor/quizzes/${quizId}/edit?error=Failed to delete question.`
+            );
+        }
     },
 );
 
@@ -1880,26 +1879,49 @@ app.post("/professor/users/create", requireProfessor, (req, res) => {
         },
     );
 });
-// POST /professor/quizzes/1/delete
-app.post("/professor/quizzes/:quizId/delete", requireProfessor, (req, res) => {
+// POST /professor/quizzes/:quizId/delete
+app.post("/professor/quizzes/:quizId/delete", requireProfessor, async (req, res) => {
     const db = req.app.locals.db;
     const quizId = req.params.quizId;
     const professorId = req.session.userId;
 
-    db.query(
-        "DELETE FROM quizzes WHERE id = $1 AND professor_id = $2",
-        [quizId, professorId],
-        (err) => {
-            if (err) {
-                return res.redirect(
-                    "/professor/dashboard?error=Failed to delete quiz.",
-                );
+    try {
+        // 1. Get all image paths for this quiz before deletion
+        const result = await db.query(
+            `SELECT q.question_image_path, j.image_path as justification_image_path 
+             FROM questions q 
+             LEFT JOIN justifications j ON q.id = j.question_id 
+             WHERE q.quiz_id = $1`,
+            [quizId]
+        );
+
+        // 2. Delete all associated images from Supabase
+        if (result.rows && result.rows.length > 0) {
+            for (const row of result.rows) {
+                if (row.question_image_path) {
+                    await deleteFromSupabase(row.question_image_path);
+                }
+                if (row.justification_image_path) {
+                    await deleteFromSupabase(row.justification_image_path);
+                }
             }
-            res.redirect(
-                "/professor/dashboard?success=Quiz deleted successfully.",
-            );
-        },
-    );
+        }
+
+        // 3. Delete quiz (cascade deletes questions, justifications, attempts, answers)
+        await db.query(
+            "DELETE FROM quizzes WHERE id = $1 AND professor_id = $2",
+            [quizId, professorId]
+        );
+
+        res.redirect(
+            "/professor/dashboard?success=Quiz deleted successfully."
+        );
+    } catch (err) {
+        console.error("Quiz deletion error:", err.message);
+        res.redirect(
+            "/professor/dashboard?error=Failed to delete quiz."
+        );
+    }
 });
 // POST /professor/users/delete - Delete a user
 app.post("/professor/users/delete", requireProfessor, (req, res) => {
@@ -1953,14 +1975,7 @@ app.post("/professor/users/delete", requireProfessor, (req, res) => {
 
 // --- ERROR HANDLING MIDDLEWARE ---
 app.use((err, req, res, next) => {
-    if (req.files) {
-        const files = Array.isArray(req.files) ? req.files : Object.values(req.files).flat();
-        files.forEach(file => {
-            if (file.path && fs.existsSync(file.path)) {
-                fs.unlinkSync(file.path);
-            }
-        });
-    }
+    // Note: No local file cleanup needed as we use Supabase cloud storage with memory buffers
     
     if (err instanceof multer.MulterError) {
         console.error('Multer error:', err.code, err.message);
