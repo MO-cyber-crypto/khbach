@@ -1,41 +1,42 @@
 // server.js
-
-// 1. Load Modules
 const express = require("express");
 const session = require("express-session");
-const { Pool } = require("pg");
-const pgSession = require("connect-pg-simple")(session);
+const fs = require('fs');
+const { Pool } = require('pg');
+const pgSession = require('connect-pg-simple')(session);
 const path = require("path");
-const fs = require("fs");
 const crypto = require("crypto");
-const multer = require("multer");
 const rateLimit = require("express-rate-limit");
-const { createClient } = require("@supabase/supabase-js");
+const multer = require('multer');
+require('dotenv').config();
+const { supabase, supabaseAdmin } = require('./config/supabase');
 
-// 2. Initialize App and Database
+// Initialize App
 const app = express();
 const PORT = process.env.PORT || 5000;
-const DATABASE_URL = process.env.DATABASE_URL;
 
-// Defer database pool initialization until setupApp runs so importing this
-// module in a serverless environment doesn't exit the process on missing env vars.
-let pool = null;
+// 3. Middleware Configuration
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static("public"));
+app.set("view engine", "ejs");
 
-// 3. Initialize Supabase Client for Storage
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Session configuration
+// NOTE: session middleware is configured dynamically inside setupApp()
+// so we only use a Postgres-backed store when a pool is available.
 
-let supabase = null;
-if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.log("Supabase Storage initialized successfully.");
-} else {
-    console.warn("WARNING: Supabase credentials not found. File uploads will fail.");
-    console.warn("Please set SUPABASE_URL and SUPABASE_ANON_KEY environment variables.");
-}
+// Rate limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100 // limit each IP to 100 requests per windowMs
+});
+app.use(limiter);
 
-// --- FILE UPLOAD CONFIGURATION (MULTER) ---
-// Using memory storage for Supabase cloud uploads
+// Use central auth routes (clean implementation)
+const { router: authRouter } = require('./routes/auth_clean');
+app.use('/', authRouter);
+
+// File upload configuration
 const quizFileUpload = multer({
     storage: multer.memoryStorage(),
     limits: {
@@ -48,11 +49,14 @@ const quizFileUpload = multer({
 
         if (extname && mimetype) {
             return cb(null, true);
-        } else {
-            cb(new Error("Only image files (JPEG, PNG, GIF, WEBP) are allowed!"));
         }
-    },
+        cb(new Error('Invalid file type'));
+    }
 });
+
+// (auth routes are mounted above as authRouter)
+
+// NOTE: Server is started by createApp() later to allow optional DB setup in setupApp().
 
 // Helper function to upload file to Supabase Storage
 async function uploadToSupabase(fileBuffer, fileName, mimeType) {
@@ -219,24 +223,25 @@ async function initializeDatabase() {
 // 3. Configure Database Connection and Initialization
 async function setupApp() {
     try {
-        if (!DATABASE_URL) {
-            throw new Error('DATABASE_URL environment variable is not set');
+        if (!process.env.DATABASE_URL) {
+            console.warn('DATABASE_URL is not set — skipping Postgres pool setup. Continuing with Supabase-only mode.');
+            pool = null;
+        } else {
+            pool = new Pool({
+                connectionString: process.env.DATABASE_URL,
+                ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+            });
+
+            const client = await pool.connect();
+            console.log("Connected to PostgreSQL database.");
+            client.release();
+
+            // Initialize database schema first
+            await initializeDatabase();
+
+            // Expose the database pool
+            app.locals.db = pool;
         }
-
-        pool = new Pool({
-            connectionString: DATABASE_URL,
-            ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-        });
-
-        const client = await pool.connect();
-        console.log("Connected to PostgreSQL database.");
-        client.release();
-
-        // Initialize database schema first
-        await initializeDatabase();
-
-        // Expose the database pool
-        app.locals.db = pool;
 
         // 4. Configure Middleware
         app.use(express.static(path.join(__dirname, "public")));
@@ -257,26 +262,43 @@ async function setupApp() {
             return randomSecret;
         })();
 
-        app.use(
-            session({
-                store: new pgSession({
-                    pool: pool,
-                    tableName: 'session'
+        if (pool) {
+            app.use(
+                session({
+                    store: new pgSession({
+                        pool: pool,
+                        tableName: 'session'
+                    }),
+                    secret: SESSION_SECRET,
+                    resave: false,
+                    saveUninitialized: false,
+                    cookie: {
+                        maxAge: 1000 * 60 * 60 * 24,
+                        httpOnly: true,
+                        secure: process.env.NODE_ENV === 'production',
+                        sameSite: 'strict'
+                    },
                 }),
-                secret: SESSION_SECRET,
-                resave: false,
-                saveUninitialized: false,
-                cookie: {
-                    maxAge: 1000 * 60 * 60 * 24,
-                    httpOnly: true,
-                    secure: process.env.NODE_ENV === 'production',
-                    sameSite: 'strict'
-                },
-            }),
-        );
+            );
+        } else {
+            console.warn('No Postgres pool available — using in-memory session store. This is not suitable for production.');
+            app.use(
+                session({
+                    secret: SESSION_SECRET,
+                    resave: false,
+                    saveUninitialized: false,
+                    cookie: {
+                        maxAge: 1000 * 60 * 60 * 24,
+                        httpOnly: true,
+                        secure: process.env.NODE_ENV === 'production',
+                        sameSite: 'lax'
+                    }
+                })
+            );
+        }
     } catch (err) {
-        console.error("Error connecting to PostgreSQL database:", err.message);
-        process.exit(1);
+        console.error("Error connecting to PostgreSQL database:", err && err.message ? err.message : err);
+        // Do not exit the process; allow Supabase-only flows for development
     }
 }
 
