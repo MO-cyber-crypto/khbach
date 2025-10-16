@@ -1,13 +1,9 @@
 // server.js
 const express = require("express");
 const session = require("express-session");
-const fs = require('fs');
-const { Pool } = require('pg');
-const pgSession = require('connect-pg-simple')(session);
 const path = require("path");
 const crypto = require("crypto");
 const rateLimit = require("express-rate-limit");
-const multer = require('multer');
 require('dotenv').config();
 const { supabase, supabaseAdmin } = require('./config/supabase');
 
@@ -16,23 +12,20 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // 3. Middleware Configuration
-app.set('trust proxy', 1); // Required for Vercel/Proxy environments
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static("public"));
 app.set("view engine", "ejs");
-app.set("views", path.join(__dirname, "views"));
 
 // Session configuration
 app.use(session({
-  secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
+    secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
 }));
 
 // Rate limiting
@@ -42,9 +35,129 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Use central auth routes (clean implementation)
-const { router: authRouter } = require('./routes/auth_clean');
-app.use('/', authRouter);
+// Authentication middleware
+const authenticateUser = async (req, res, next) => {
+    if (!req.session.user) {
+        return res.redirect('/login');
+    }
+    next();
+};
+
+const authenticateProfessor = async (req, res, next) => {
+    if (!req.session.user || req.session.user.role !== 'professor') {
+        return res.redirect('/login');
+    }
+    next();
+};
+
+// Routes
+app.get('/', (req, res) => {
+    res.redirect('/login');
+});
+
+app.get('/login', (req, res) => {
+    res.render('login', { error: req.query.error || null });
+});
+
+app.post('/login', async (req, res) => {
+    const { email, password } = req.body;
+
+    try {
+        // Check user credentials in the database
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', email)
+            .eq('password', password)
+            .single();
+
+        if (error || !user) {
+            return res.redirect('/login?error=Invalid credentials');
+        }
+
+        // Set user session
+        req.session.user = {
+            id: user.id,
+            email: user.email,
+            role: user.role
+        };
+
+        // Redirect based on role
+        if (user.role === 'professor') {
+            res.redirect('/professor/dashboard');
+        } else {
+            res.redirect('/student/dashboard');
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        res.redirect('/login?error=Server error occurred');
+    }
+});
+        return res.redirect('/login');
+    }
+    next();
+};
+
+const authenticateProfessor = async (req, res, next) => {
+    if (!req.session.user || req.session.user.role !== 'professor') {
+        return res.redirect('/login');
+    }
+    next();
+};
+
+// Routes
+app.get('/', (req, res) => {
+    res.redirect('/login');
+});
+
+app.get('/login', (req, res) => {
+    res.render('login', { error: req.query.error || null });
+});
+
+app.post('/login', async (req, res) => {
+    const { email, password } = req.body;
+
+    try {
+        // Query the users table for the provided credentials
+        const { data: user, error } = await supabaseAdmin
+            .from('users')
+            .select('*')
+            .eq('email', email)
+            .eq('password', password)
+            .single();
+
+        if (error || !user) {
+            return res.redirect('/login?error=Invalid credentials');
+        }
+
+        // Store user info in session
+        req.session.user = {
+            id: user.id,
+            email: user.email,
+            role: user.role
+        };
+
+        // Redirect based on role
+        if (user.role === 'professor') {
+            res.redirect('/professor/dashboard');
+        } else {
+            res.redirect('/student/dashboard');
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        res.redirect('/login?error=An unexpected error occurred');
+    }
+});
+
+app.get('/logout', (req, res) => {
+    req.session.destroy();
+    res.redirect('/login');
+});
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100 // limit each IP to 100 requests per windowMs
+});
+app.use(limiter);
 
 // File upload configuration
 const quizFileUpload = multer({
@@ -64,9 +177,24 @@ const quizFileUpload = multer({
     }
 });
 
-// (auth routes are mounted above as authRouter)
+// Import routes
+const authRoutes = require('./routes/auth');
 
-// NOTE: Server is started by createApp() later to allow optional DB setup in setupApp().
+// Use routes
+app.use('/', authRoutes);
+
+// Start server
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
+
+        if (extname && mimetype) {
+            return cb(null, true);
+        } else {
+            cb(new Error("Only image files (JPEG, PNG, GIF, WEBP) are allowed!"));
+        }
+    },
+});
 
 // Helper function to upload file to Supabase Storage
 async function uploadToSupabase(fileBuffer, fileName, mimeType) {
@@ -233,25 +361,24 @@ async function initializeDatabase() {
 // 3. Configure Database Connection and Initialization
 async function setupApp() {
     try {
-        if (!process.env.DATABASE_URL) {
-            console.warn('DATABASE_URL is not set — skipping Postgres pool setup. Continuing with Supabase-only mode.');
-            pool = null;
-        } else {
-            pool = new Pool({
-                connectionString: process.env.DATABASE_URL,
-                ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-            });
-
-            const client = await pool.connect();
-            console.log("Connected to PostgreSQL database.");
-            client.release();
-
-            // Initialize database schema first
-            await initializeDatabase();
-
-            // Expose the database pool
-            app.locals.db = pool;
+        if (!DATABASE_URL) {
+            throw new Error('DATABASE_URL environment variable is not set');
         }
+
+        pool = new Pool({
+            connectionString: DATABASE_URL,
+            ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+        });
+
+        const client = await pool.connect();
+        console.log("Connected to PostgreSQL database.");
+        client.release();
+
+        // Initialize database schema first
+        await initializeDatabase();
+
+        // Expose the database pool
+        app.locals.db = pool;
 
         // 4. Configure Middleware
         app.use(express.static(path.join(__dirname, "public")));
@@ -272,43 +399,26 @@ async function setupApp() {
             return randomSecret;
         })();
 
-        if (pool) {
-            app.use(
-                session({
-                    store: new pgSession({
-                        pool: pool,
-                        tableName: 'session'
-                    }),
-                    secret: SESSION_SECRET,
-                    resave: false,
-                    saveUninitialized: false,
-                    cookie: {
-                        maxAge: 1000 * 60 * 60 * 24,
-                        httpOnly: true,
-                        secure: process.env.NODE_ENV === 'production',
-                        sameSite: 'strict'
-                    },
+        app.use(
+            session({
+                store: new pgSession({
+                    pool: pool,
+                    tableName: 'session'
                 }),
-            );
-        } else {
-            console.warn('No Postgres pool available — using in-memory session store. This is not suitable for production.');
-            app.use(
-                session({
-                    secret: SESSION_SECRET,
-                    resave: false,
-                    saveUninitialized: false,
-                    cookie: {
-                        maxAge: 1000 * 60 * 60 * 24,
-                        httpOnly: true,
-                        secure: process.env.NODE_ENV === 'production',
-                        sameSite: 'lax'
-                    }
-                })
-            );
-        }
+                secret: SESSION_SECRET,
+                resave: false,
+                saveUninitialized: false,
+                cookie: {
+                    maxAge: 1000 * 60 * 60 * 24,
+                    httpOnly: true,
+                    secure: process.env.NODE_ENV === 'production',
+                    sameSite: 'strict'
+                },
+            }),
+        );
     } catch (err) {
-        console.error("Error connecting to PostgreSQL database:", err && err.message ? err.message : err);
-        // Do not exit the process; allow Supabase-only flows for development
+        console.error("Error connecting to PostgreSQL database:", err.message);
+        process.exit(1);
     }
 }
 
