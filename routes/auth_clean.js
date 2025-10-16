@@ -24,6 +24,10 @@ router.get('/login', (req, res) => {
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   try {
+    if (!supabaseAdmin) {
+      console.error('supabaseAdmin client is not configured.');
+      return res.status(500).render('login', { error: 'Server not configured. Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.' });
+    }
     const { data: user, error } = await supabaseAdmin
       .from('users')
       .select('*')
