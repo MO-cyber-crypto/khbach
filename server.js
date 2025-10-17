@@ -62,11 +62,10 @@ const quizFileUpload = multer({
 });
 
 // Import routes
-const authRoutes = require('./routes/auth_clean');
+const { router: authRoutes, authenticateUser, authenticateProfessor } = require('./routes/auth_clean');
 
 // Configure Routes
 app.use('/', authRoutes);
-
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);
