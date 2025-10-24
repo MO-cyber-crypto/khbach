@@ -11,8 +11,6 @@ const { supabase, supabaseAdmin } = require('./config/supabase');
 // Initialize App
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
 
 // 3. Middleware Configuration
 app.set('trust proxy', 1); // Required for Vercel/Proxy environments
